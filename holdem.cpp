@@ -420,7 +420,7 @@ string categoryName(int cat) {
 static random_device rd;
 static mt19937 rng(rd());
 
-enum Action { A_CHECK, A_BET, A_CALL, A_RAISE };
+enum Action { A_CHECK, A_BET, A_CALL, A_RAISE, A_FOLD };
 
 Action pickRandom(const vector<Action>& allowed) {
     uniform_int_distribution<int> dist(0, (int)allowed.size()-1);
@@ -433,6 +433,7 @@ string actionStr(Action a) {
         case A_BET:   return "bet";
         case A_CALL:  return "call";
         case A_RAISE: return "raise";
+       case  A_FOLD:  return  "fold";
     }
     return "?";
 }
@@ -447,13 +448,16 @@ void playStreetLog(const string& streetName, int firstPlayer) {
     bool finished = false;
     int current = firstPlayer;
     int actionCount = 0;
+    int pot = 0
+    int firstPlayerChips = 0
+    int secondPlayerChips = 0
 
     while(!finished) {
         vector<Action> allowed;
         if(!hasBet) allowed = {A_CHECK, A_BET};
         else {
-            if(raises < MAX_RAISES) allowed = {A_CALL, A_RAISE};
-            else allowed = {A_CALL};
+            if(raises < MAX_RAISES) allowed = {A_CALL, A_RAISE, A_FOLD};
+            else allowed = {A_CALL, A_FOLD};
         }
         Action pick = pickRandom(allowed);
         cout << "Player " << current << ": " << actionStr(pick) << "\n";
@@ -461,15 +465,32 @@ void playStreetLog(const string& streetName, int firstPlayer) {
         if(pick == A_BET) {
             hasBet = true;
             raises = 1; // first bet counts as a single bet/raise
+            pot = pot + 20
         } else if(pick == A_RAISE) {
+            if (actionCount >= 1){ 
+               pot = pot + 40
+            }
+
             hasBet = true;
             ++raises;
         } else if(pick == A_CALL) {
+            if (actionCount >= 1){ 
+               pot = pot + 20
+            }
             // call completes and ends the street
             finished = true;
         } else if(pick == A_CHECK) {
             // If both players checked in sequence, end street
             if(actionCount > 0 && current != firstPlayer) finished = true;
+        } else if(pick == A_FOLD) {
+            // If both players checked in sequence, end street
+            if (current != firstPlayer) {
+               firstPlayerChips = firstPlayerChips + pot
+            } else {
+               secondPlayerChips = secondPlayerChips + pot
+            }
+           
+            finished = true;
         }
 
         // prepare next actor
@@ -479,6 +500,7 @@ void playStreetLog(const string& streetName, int firstPlayer) {
             finished = true;
         }
     }
+   return (pot,firstPlayerChips,secondPlayerChips,pick)
 }
 
 /* ------------------------------------------------------------------
@@ -506,9 +528,11 @@ int main() {
         Deck deck;
         deck.reset();
         deck.shuffle();
+        chips1 = 0
+        chips2 = 0
 
-        vector<int> p1 = { deck.deal(), deck.deal() };
-        vector<int> p2 = { deck.deal(), deck.deal() };
+        vector<int> p1 = { deck.deal(), deck.deal(), chips1 };
+        vector<int> p2 = { deck.deal(), deck.deal(), chips2 };
         vector<int> board = { deck.deal(), deck.deal(), deck.deal(), deck.deal(), deck.deal() };
 
         cout << "Player 1: " << cardToString(p1[0]) << ", " << cardToString(p1[1]) << "\n";
