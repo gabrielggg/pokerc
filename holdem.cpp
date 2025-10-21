@@ -438,9 +438,18 @@ string actionStr(Action a) {
     return "?";
 }
 
+struct gameState {
+    int pot;
+    int firstPlayerChips;
+    int secondPlayerChips;
+    std::string lastStreetAction;
+    int lastActingPlayer;
+};
+
+
 // Play a street and print every action. We do not track chips/pot;
 // we only ensure legal action flow. firstPlayer is 1 or 2 starting actor.
-void playStreetLog(const string& streetName, int firstPlayer) {
+gameState playStreetLog(const string& streetName, int firstPlayer) {
     cout << "\n-- " << streetName << " --\n";
     bool hasBet = false;
     int raises = 0;
@@ -448,12 +457,19 @@ void playStreetLog(const string& streetName, int firstPlayer) {
     bool finished = false;
     int current = firstPlayer;
     int actionCount = 0;
-    int pot = 0
-    int firstPlayerChips = 0
-    int secondPlayerChips = 0
-
+    int streetPot = 0;
+    int firstPlayerChipsOnPot = 0;
+    int secondPlayerChipsOnPot = 0;
+    string pickAction;
+    if (streetName == "Preflop"){
+            hasBet = true;
+            firstPlayerChipsOnPot = 10;
+            secondPlayerChipsOnPot = 20;
+            streetPot = 30;
+        }
     while(!finished) {
         vector<Action> allowed;
+        
         if(!hasBet) allowed = {A_CHECK, A_BET};
         else {
             if(raises < MAX_RAISES) allowed = {A_CALL, A_RAISE, A_FOLD};
@@ -461,21 +477,39 @@ void playStreetLog(const string& streetName, int firstPlayer) {
         }
         Action pick = pickRandom(allowed);
         cout << "Player " << current << ": " << actionStr(pick) << "\n";
-
+        pickAction = actionStr(pick);
         if(pick == A_BET) {
             hasBet = true;
             raises = 1; // first bet counts as a single bet/raise
-            pot = pot + 20
+            streetPot = streetPot + 20;
+            firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? 20 : 0);
+            secondPlayerChipsOnPot = secondPlayerChipsOnPot + (current==1 ? 0 : 20);
+
         } else if(pick == A_RAISE) {
-            if (actionCount >= 1){ 
-               pot = pot + 40
+            if (actionCount >= 1 | streetName == "Preflop"){ 
+               if (streetName == "Preflop" & actionCount==0){
+                streetPot = streetPot + 30;
+                firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? 30 : 0);
+               } else{
+                streetPot = streetPot + 40;
+                firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? 40 : 0);
+                secondPlayerChipsOnPot = secondPlayerChipsOnPot + (current==1 ? 0 : 40);
+               }
+               
             }
 
             hasBet = true;
             ++raises;
         } else if(pick == A_CALL) {
-            if (actionCount >= 1){ 
-               pot = pot + 20
+            if (actionCount >= 1 | streetName == "Preflop"){ 
+               if (streetName == "Preflop" & actionCount == 0){
+                streetPot = streetPot + 10;
+               } else{
+                streetPot = streetPot + 20;
+               }
+               
+               firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? (secondPlayerChipsOnPot-firstPlayerChipsOnPot) : 0);
+               secondPlayerChipsOnPot = secondPlayerChipsOnPot + (current==1 ? 0 : (firstPlayerChipsOnPot-secondPlayerChipsOnPot));
             }
             // call completes and ends the street
             finished = true;
@@ -484,23 +518,33 @@ void playStreetLog(const string& streetName, int firstPlayer) {
             if(actionCount > 0 && current != firstPlayer) finished = true;
         } else if(pick == A_FOLD) {
             // If both players checked in sequence, end street
-            if (current != firstPlayer) {
-               firstPlayerChips = firstPlayerChips + pot
-            } else {
-               secondPlayerChips = secondPlayerChips + pot
-            }
+            //if (current != firstPlayer) {
+            //   firstPlayerChipsOnPot = firstPlayerChipsOnPot + streetPot;
+            //} else {
+            //   secondPlayerChipsOnPot = secondPlayerChipsOnPot + streetPot;
+            //}
            
             finished = true;
         }
 
         // prepare next actor
-        current = (current==1 ? 2 : 1);
-        ++actionCount;
-        if(actionCount > 12) { // safety net
-            finished = true;
+        if (finished != true) {
+            current = (current==1 ? 2 : 1);
+            ++actionCount;
+            if(actionCount > 12) { // safety net
+                finished = true;
+            }
         }
+        
     }
-   return (pot,firstPlayerChips,secondPlayerChips,pick)
+    gameState currentState;
+    currentState.pot = streetPot;
+    currentState.firstPlayerChips = firstPlayerChipsOnPot;
+    currentState.secondPlayerChips = secondPlayerChipsOnPot;
+    currentState.lastStreetAction = pickAction;
+    currentState.lastActingPlayer = current;
+
+    return currentState;
 }
 
 /* ------------------------------------------------------------------
@@ -528,8 +572,12 @@ int main() {
         Deck deck;
         deck.reset();
         deck.shuffle();
-        chips1 = 0
-        chips2 = 0
+        int chips1 = 10000;
+        int chips2 = 10000;
+        string action = "";
+        int pot = 0;
+
+        //gameState blindsState = playStreetLog("Blinds", 1);
 
         vector<int> p1 = { deck.deal(), deck.deal(), chips1 };
         vector<int> p2 = { deck.deal(), deck.deal(), chips2 };
@@ -537,58 +585,91 @@ int main() {
 
         cout << "Player 1: " << cardToString(p1[0]) << ", " << cardToString(p1[1]) << "\n";
         cout << "Player 2: " << cardToString(p2[0]) << ", " << cardToString(p2[1]) << "\n";
-
+        
+        
         // Preflop (player 1 acts first)
-        playStreetLog("Preflop", 1);
+        gameState preflopState = playStreetLog("Preflop", 1);
+        //action = playStreetLog("Preflop", 1);
+        action = preflopState.lastStreetAction;
+        pot = preflopState.pot;
+        int firstPlayerChips = preflopState.firstPlayerChips;
+        int secondPlayerChips = preflopState.secondPlayerChips;
+        cout << "Last preflop action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
+        //playStreetLog("Preflop", 1);
 
         // Flop
-        cout << "Flop: " << cardToString(board[0]) << ", " << cardToString(board[1]) << ", " << cardToString(board[2]) << "\n";
-        playStreetLog("Flop", 1);
-
-        // Turn
-        cout << "Turn: " << cardToString(board[3]) << "\n";
-        playStreetLog("Turn", 1);
-
-        // River
-        cout << "River: " << cardToString(board[4]) << "\n";
-        playStreetLog("River", 1);
-
-        // Showdown: evaluate both players' best 5-card class from 7 cards
-        vector<int> all1 = p1; all1.insert(all1.end(), board.begin(), board.end());
-        vector<int> all2 = p2; all2.insert(all2.end(), board.begin(), board.end());
-        int idx1 = evaluate7_bestIndex(all1, table);
-        int idx2 = evaluate7_bestIndex(all2, table);
-
-        // For user-friendliness also compute the HandClass to print category
-        // We re-evaluate best HandClass (we could modify evaluate7_bestIndex to return it)
-        HandClass bestHC1, bestHC2;
-        bool hb1=false, hb2=false;
-        array<int,5> combo;
-        for(int a=0;a<7;a++) for(int b=a+1;b<7;b++) for(int c=b+1;c<7;c++)
-        for(int d=c+1;d<7;d++) for(int e=d+1;e<7;e++){
-            combo = { all1[a], all1[b], all1[c], all1[d], all1[e] };
-            HandClass hc = classify5(combo);
-            if(!hb1 || handClassBetter(hc, bestHC1)) { bestHC1 = hc; hb1=true; }
-            combo = { all2[a], all2[b], all2[c], all2[d], all2[e] };
-            HandClass hc2 = classify5(combo);
-            if(!hb2 || handClassBetter(hc2, bestHC2)) { bestHC2 = hc2; hb2=true; }
+        if (action != "fold"){
+            cout << "Flop: " << cardToString(board[0]) << ", " << cardToString(board[1]) << ", " << cardToString(board[2]) << "\n";
+            //action = playStreetLog("Flop", 1);
+            gameState flopState = playStreetLog("Flop", 2);
+            action = flopState.lastStreetAction;
+            pot = pot + flopState.pot;
+            firstPlayerChips = firstPlayerChips + flopState.firstPlayerChips;
+            secondPlayerChips = secondPlayerChips + flopState.secondPlayerChips;
+            cout << "Last flop action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
         }
 
-        cout << "\n-- Showdown --\n";
-        cout << "Board: " << cardToString(board[0]) << ", " << cardToString(board[1]) << ", "
-             << cardToString(board[2]) << ", " << cardToString(board[3]) << ", " << cardToString(board[4]) << "\n\n";
+        // Turn
+        if (action != "fold"){
+            cout << "Turn: " << cardToString(board[3]) << "\n";
+            //action = playStreetLog("Turn", 1);
+            gameState turnState = playStreetLog("Turn", 2);
+            action = turnState.lastStreetAction;
+            pot = pot + turnState.pot;
+            firstPlayerChips = firstPlayerChips + turnState.firstPlayerChips;
+            secondPlayerChips = secondPlayerChips + turnState.secondPlayerChips;
+            cout << "Last turn action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
+        }
 
-        cout << "Player 1: " << cardToString(p1[0]) << ", " << cardToString(p1[1]) << "\n";
-        cout << "  Category: " << categoryName(bestHC1.category)
-             << "  Index: " << idx1 << " (1=best, 7462=worst)\n";
+        // River
+        if (action != "fold"){
+            cout << "River: " << cardToString(board[4]) << "\n";
+            //action = playStreetLog("River", 1);
+            gameState riverState = playStreetLog("River", 2);
+            action = riverState.lastStreetAction;
+            pot = pot + riverState.pot;
+            firstPlayerChips = firstPlayerChips + riverState.firstPlayerChips;
+            secondPlayerChips = secondPlayerChips + riverState.secondPlayerChips;
+            cout << "Last river action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
+            if (action != "fold"){
+                // Showdown: evaluate both players' best 5-card class from 7 cards
+                vector<int> all1 = p1; all1.insert(all1.end(), board.begin(), board.end());
+                vector<int> all2 = p2; all2.insert(all2.end(), board.begin(), board.end());
+                int idx1 = evaluate7_bestIndex(all1, table);
+                int idx2 = evaluate7_bestIndex(all2, table);
 
-        cout << "Player 2: " << cardToString(p2[0]) << ", " << cardToString(p2[1]) << "\n";
-        cout << "  Category: " << categoryName(bestHC2.category)
-             << "  Index: " << idx2 << " (1=best, 7462=worst)\n";
+                // For user-friendliness also compute the HandClass to print category
+                // We re-evaluate best HandClass (we could modify evaluate7_bestIndex to return it)
+                HandClass bestHC1, bestHC2;
+                bool hb1=false, hb2=false;
+                array<int,5> combo;
+                for(int a=0;a<7;a++) for(int b=a+1;b<7;b++) for(int c=b+1;c<7;c++)
+                for(int d=c+1;d<7;d++) for(int e=d+1;e<7;e++){
+                    combo = { all1[a], all1[b], all1[c], all1[d], all1[e] };
+                    HandClass hc = classify5(combo);
+                    if(!hb1 || handClassBetter(hc, bestHC1)) { bestHC1 = hc; hb1=true; }
+                    combo = { all2[a], all2[b], all2[c], all2[d], all2[e] };
+                    HandClass hc2 = classify5(combo);
+                    if(!hb2 || handClassBetter(hc2, bestHC2)) { bestHC2 = hc2; hb2=true; }
+                }
 
-        if(idx1 < idx2) cout << "Result: Player 1 wins (lower index = better)\n";
-        else if(idx2 < idx1) cout << "Result: Player 2 wins\n";
-        else cout << "Result: Tie (equal index)\n";
+                cout << "\n-- Showdown --\n";
+                cout << "Board: " << cardToString(board[0]) << ", " << cardToString(board[1]) << ", "
+                    << cardToString(board[2]) << ", " << cardToString(board[3]) << ", " << cardToString(board[4]) << "\n\n";
+
+                cout << "Player 1: " << cardToString(p1[0]) << ", " << cardToString(p1[1]) << "\n";
+                cout << "  Category: " << categoryName(bestHC1.category)
+                    << "  Index: " << idx1 << " (1=best, 7462=worst)\n";
+
+                cout << "Player 2: " << cardToString(p2[0]) << ", " << cardToString(p2[1]) << "\n";
+                cout << "  Category: " << categoryName(bestHC2.category)
+                    << "  Index: " << idx2 << " (1=best, 7462=worst)\n";
+
+                if(idx1 < idx2) cout << "Result: Player 1 wins (lower index = better)\n";
+                else if(idx2 < idx1) cout << "Result: Player 2 wins\n";
+                else cout << "Result: Tie (equal index)\n";
+            }
+        }
     }
 
     cout << "\nSimulation complete.\n";
