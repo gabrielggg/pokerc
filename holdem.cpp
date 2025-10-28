@@ -463,8 +463,8 @@ gameState playStreetLog(const string& streetName, int firstPlayer) {
     string pickAction;
     if (streetName == "Preflop"){
             hasBet = true;
-            firstPlayerChipsOnPot = 10;
-            secondPlayerChipsOnPot = 20;
+            firstPlayerChipsOnPot = (current==1 ? 10 : 20);
+            secondPlayerChipsOnPot = (current==1 ? 20 : 10);
             streetPot = 30;
         }
     while(!finished) {
@@ -486,10 +486,11 @@ gameState playStreetLog(const string& streetName, int firstPlayer) {
             secondPlayerChipsOnPot = secondPlayerChipsOnPot + (current==1 ? 0 : 20);
 
         } else if(pick == A_RAISE) {
-            if (actionCount >= 1 | streetName == "Preflop"){ 
+            if (actionCount >= 1 || streetName == "Preflop"){ 
                if (streetName == "Preflop" & actionCount==0){
                 streetPot = streetPot + 30;
                 firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? 30 : 0);
+                secondPlayerChipsOnPot = secondPlayerChipsOnPot + (current==1 ? 0 : 30);
                } else{
                 streetPot = streetPot + 40;
                 firstPlayerChipsOnPot = firstPlayerChipsOnPot + (current==1 ? 40 : 0);
@@ -501,8 +502,8 @@ gameState playStreetLog(const string& streetName, int firstPlayer) {
             hasBet = true;
             ++raises;
         } else if(pick == A_CALL) {
-            if (actionCount >= 1 | streetName == "Preflop"){ 
-               if (streetName == "Preflop" & actionCount == 0){
+            if (actionCount >= 1 || streetName == "Preflop"){ 
+               if (streetName == "Preflop" && actionCount == 0){
                 streetPot = streetPot + 10;
                } else{
                 streetPot = streetPot + 20;
@@ -576,19 +577,30 @@ int main() {
         int chips2 = 10000;
         string action = "";
         int pot = 0;
+        int firstToAct = 1;
+        int secondToAct = 2;
+        bool folded = false;
 
         //gameState blindsState = playStreetLog("Blinds", 1);
 
-        vector<int> p1 = { deck.deal(), deck.deal(), chips1 };
-        vector<int> p2 = { deck.deal(), deck.deal(), chips2 };
+        vector<int> p1 = { deck.deal(), deck.deal() };
+        vector<int> p2 = { deck.deal(), deck.deal() };
         vector<int> board = { deck.deal(), deck.deal(), deck.deal(), deck.deal(), deck.deal() };
 
         cout << "Player 1: " << cardToString(p1[0]) << ", " << cardToString(p1[1]) << "\n";
         cout << "Player 2: " << cardToString(p2[0]) << ", " << cardToString(p2[1]) << "\n";
         
+        // Check for divisibility by 2
+        if (hnum % 2 != 0) {
+            firstToAct = 1;
+            secondToAct = 2;
+        } else {
+            firstToAct = 2;
+            secondToAct = 1;
+        }
         
         // Preflop (player 1 acts first)
-        gameState preflopState = playStreetLog("Preflop", 1);
+        gameState preflopState = playStreetLog("Preflop", firstToAct);
         //action = playStreetLog("Preflop", 1);
         action = preflopState.lastStreetAction;
         pot = preflopState.pot;
@@ -601,31 +613,47 @@ int main() {
         if (action != "fold"){
             cout << "Flop: " << cardToString(board[0]) << ", " << cardToString(board[1]) << ", " << cardToString(board[2]) << "\n";
             //action = playStreetLog("Flop", 1);
-            gameState flopState = playStreetLog("Flop", 2);
+            gameState flopState = playStreetLog("Flop", secondToAct);
             action = flopState.lastStreetAction;
             pot = pot + flopState.pot;
             firstPlayerChips = firstPlayerChips + flopState.firstPlayerChips;
             secondPlayerChips = secondPlayerChips + flopState.secondPlayerChips;
             cout << "Last flop action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
+        } else {
+            if(firstPlayerChips > secondPlayerChips){
+                cout << "secondplayer folded preflop" << " firstplayer wins: " << secondPlayerChips << "\n";
+            } else{
+                cout << "firstplayer folded preflop" << " second player wins: " << firstPlayerChips << "\n";
+            }
+            folded = true;
         }
 
         // Turn
         if (action != "fold"){
             cout << "Turn: " << cardToString(board[3]) << "\n";
             //action = playStreetLog("Turn", 1);
-            gameState turnState = playStreetLog("Turn", 2);
+            gameState turnState = playStreetLog("Turn", secondToAct);
             action = turnState.lastStreetAction;
             pot = pot + turnState.pot;
             firstPlayerChips = firstPlayerChips + turnState.firstPlayerChips;
             secondPlayerChips = secondPlayerChips + turnState.secondPlayerChips;
             cout << "Last turn action: " << action << ", " << "Pot: " << pot << " firstPlayerChipsOnPot: " << firstPlayerChips << " secondPlayerChipsOnPot: " << secondPlayerChips << "\n";
+        } else {
+            if (folded == false){
+                if(firstPlayerChips > secondPlayerChips){
+                    cout << "secondplayer folded flop" << " firstplayer wins: " << secondPlayerChips << "\n";
+                } else{
+                    cout << "firstplayer folded flop" << " second player wins: " << firstPlayerChips << "\n";
+                }
+                folded = true;
+            }
         }
 
         // River
         if (action != "fold"){
             cout << "River: " << cardToString(board[4]) << "\n";
             //action = playStreetLog("River", 1);
-            gameState riverState = playStreetLog("River", 2);
+            gameState riverState = playStreetLog("River", secondToAct);
             action = riverState.lastStreetAction;
             pot = pot + riverState.pot;
             firstPlayerChips = firstPlayerChips + riverState.firstPlayerChips;
@@ -665,9 +693,24 @@ int main() {
                 cout << "  Category: " << categoryName(bestHC2.category)
                     << "  Index: " << idx2 << " (1=best, 7462=worst)\n";
 
-                if(idx1 < idx2) cout << "Result: Player 1 wins (lower index = better)\n";
-                else if(idx2 < idx1) cout << "Result: Player 2 wins\n";
+                if(idx1 < idx2) cout << "Result: Player 1 wins "  << secondPlayerChips << "(lower index = better)\n";
+                else if(idx2 < idx1) cout << "Result: Player 2 wins" << firstPlayerChips << "\n";
                 else cout << "Result: Tie (equal index)\n";
+            } else {
+            if(firstPlayerChips > secondPlayerChips){
+                cout << "secondplayer folded river" << " firstplayer wins: " << secondPlayerChips << "\n";
+            } else{
+                cout << "firstplayer folded river" << " second player wins: " << firstPlayerChips << "\n";
+            }
+        }
+        } else {
+            if (folded == false){
+                if(firstPlayerChips > secondPlayerChips){
+                    cout << "secondplayer folded turn" << " firstplayer wins: " << secondPlayerChips << "\n";
+                } else{
+                    cout << "firstplayer folded turn" << " second player wins: " << firstPlayerChips << "\n";
+                }
+                folded = true;
             }
         }
     }
